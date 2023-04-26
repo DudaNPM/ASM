@@ -46,8 +46,8 @@ class Aviao:
     def getDestino(self):
         return self.destino
     
-    def setOp(self, op:str):
-        self.op = op
+    def setOperation(self, op:str):
+        self.operation = op
     
     def setId(self, id:str):
         self.id = id
@@ -65,4 +65,4 @@ class Aviao:
         self.destino = destino
     
     def toString(self):
-        return "Aviao=[ID=" + str(self.id) + " Operation=" + self.operation + " Companhia=" + self.companhia + " Tipo=" + self.tipo + " Origem=" + self.origem + " Destino=" + self.destino + "]"
+        return "Aviao=[ID=" + str(self.id) + " Operação=" + self.operation + " Tipo=" + self.tipo + " Companhia=" + self.companhia + " Origem=" + self.origem + " Destino=" + self.destino + "]"

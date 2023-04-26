@@ -1,6 +1,7 @@
 import datetime
 import jsonpickle
 
+from utils.gare import Gare
 from utils.aviao import Aviao
 
 from spade import agent
@@ -8,19 +9,20 @@ from spade.message import Message
 from spade.behaviour import CyclicBehaviour
 from spade.behaviour import PeriodicBehaviour
 
-from utils.functions import get_avioes_estacionados
+from utils.functions import get_avioes_descolar
 from utils.functions import get_closest_lane_to_gare
 from utils.functions import get_closest_lane_and_gare
 
 
 
-MAX = 20 # número máximo de aviões em fila de espera para aterrar
+MAX = 5 # número máximo de aviões em fila de espera para aterrar
 
 
 
 class TorreControlo(agent.Agent):
 
     ## avioes
+    gares = list[Gare]()
     aterragens = list[Aviao]()
     descolagens = list[Aviao]()
 
@@ -39,7 +41,7 @@ class TorreControlo(agent.Agent):
 
     class Info(PeriodicBehaviour):
         async def run(self):
-            body = {'aterragens':self.agent.aterragens, 'descolagens':self.agent.descolagens}
+            body = {'gares':self.agent.gares, 'aterragens':self.agent.aterragens, 'descolagens':self.agent.descolagens}
             msg = Message(to=self.get('InfoID'))
             msg.set_metadata('performative', 'global_info')
             msg.body = jsonpickle.encode(body)
@@ -59,9 +61,16 @@ class TorreControlo(agent.Agent):
                 
                 ## pedido de aterragem por parte de um aviao
                 if performative == 'landing_request':
-
+                    ## verificar se o avião já está na fila de espera
+                    if received in self.agent.aterragens:
+                        ## questionar o gestor de gares por uma gare livre
+                        msg = Message(to=self.get('GestorGaresID'))
+                        msg.set_metadata('performative', 'gare_request')
+                        msg.body = jsonpickle.encode(received)
+                    
                     ## verificar o limite de avioes em fila de espera para aterrar
-                    if len(self.agent.aterragens) < MAX or received in self.agent.aterragens:
+                    elif len(self.agent.aterragens) < MAX:
+                        ## adcionar o aviao à fila de espera para aterrar
                         self.agent.aterragens.append(received)
                         
                         ## questionar o gestor de gares por uma gare livre
@@ -69,8 +78,9 @@ class TorreControlo(agent.Agent):
                         msg.set_metadata('performative', 'gare_request')
                         msg.body = jsonpickle.encode(received)
                     
-                    ## mandar o aviao aterrar noutro aeroporto
+                    ## fila de espera cheia e o avião não se encontra nela
                     else:
+                        ## mandar o aviao aterrar noutro aeroporto
                         msg = Message(to=received.getId())
                         msg.set_metadata('performative', 'negative_landing')
                         msg.body = jsonpickle.encode({'status':'aeroporto'})
@@ -82,18 +92,31 @@ class TorreControlo(agent.Agent):
                 elif performative == 'positive_gare':
                     aviao = received.get('aviao')                                       # aviao
                     gares = received.get('gares')                                       # gares livres para o aviao estacionar
-                    (pista, gare) = get_closest_lane_and_gare(self.get('pistas'), gares)   # pista livre mais proxima para o aviao aterrar
-                    if pista: pista.setFree(False)                                      # alterar a pista para ocupada
-
-                    ## comunicar ao aviao a pista e a gare ou comunicar ao aviao para aguardar
-                    performative = 'positive_landing' if pista else 'negative_landing'
-                    body = {'pista':pista,'gare':gare} if pista else {'status':'aguardar'}
+                    pista, gare = get_closest_lane_and_gare(self.get('pistas'), gares)  # pista e gare mais próximas
                     
-                    msg = Message(to=str(aviao.getId()))
-                    msg.set_metadata('performative', performative)
-                    msg.body = jsonpickle.encode(body)
+                    if pista and gare:
+                        pista.setFree(False)    # alterar a pista para ocupada
+                        gare.setFree(False)     # alterar a gare para ocupada
 
-                    await self.send(msg)
+                        ## informar o gestor de gares que a gare esta reservada
+                        msg = Message(to=self.get('GestorGaresID'))
+                        msg.set_metadata('performative', 'inform_reserved_gare')
+                        msg.body = jsonpickle.encode(gare)
+                        await self.send(msg)
+
+
+                        ## comunicar ao aviao a pista e a gare
+                        msg = Message(to=aviao.getId())
+                        msg.set_metadata('performative', 'positive_landing')
+                        msg.body = jsonpickle.encode({'pista':pista,'gare':gare})
+                        await self.send(msg)
+                    
+                    else:
+                        ## comunicar ao aviao para aguardar
+                        msg = Message(to=aviao.getId())
+                        msg.set_metadata('performative', 'negative_landing')
+                        msg.body = jsonpickle.encode({'status':'aguardar'})
+                        await self.send(msg)
                 
                 
                 ## resposta negativa por parte do gestor de gares
@@ -110,7 +133,7 @@ class TorreControlo(agent.Agent):
                 elif performative == 'lane_request':
                     gare = received                                             # gare ocupada pelo aviao
                     aviao = received.getAviao()                                 # aviao que quer descolar
-                    pista = get_closest_lane_to_gare(self.get('pistas'), gare)   # pista livre mais proxima para o aviao descolar
+                    pista = get_closest_lane_to_gare(self.get('pistas'), gare)  # pista livre mais proxima para o aviao descolar
                     if pista: pista.setFree(False)                              # alterar a pista para ocupada
 
                     performative = 'positive_lane' if pista else 'negative_lane'
@@ -134,13 +157,12 @@ class TorreControlo(agent.Agent):
                     
                     if aviao in self.agent.aterragens:
                         self.agent.aterragens.remove(aviao)
-                    else:
-                        self.agent.descolagens.remove(aviao)
                 
 
                 ## mensagem do gestor de gares com informação das gares
                 elif performative == 'gares_info':
-                    self.agent.descolagens = get_avioes_estacionados(received)
+                    self.agent.gares = received
+                    self.agent.descolagens = get_avioes_descolar(received)
                 
 
                 ## mensagem de um aviao a informar que vao aterrar noutro aeroporto

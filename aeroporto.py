@@ -3,7 +3,7 @@ import time
 from utils.functions import generate_gares
 from utils.functions import generate_pistas
 from utils.functions import generate_avioes
-from utils.functions import get_avioes_estacionados
+from utils.functions import get_avioes_descolar
 
 from agents.InfoAgent import Info
 from agents.AviaoAgent import AviaoAgent
@@ -12,10 +12,10 @@ from agents.TorreControloAgent import TorreControlo
 
 
 
-GARES = 10
-PISTAS = 4
-ATERRAGENS = 20
-DESCOLAGENS = 20
+GARES = 5
+PISTAS = 2
+ATERRAGENS = 3
+DESCOLAGENS = 10
 
 
 
@@ -28,8 +28,8 @@ torrecontroloID = 'torrecontrolo@desktop-jh2ka3p'
 
 pistas = generate_pistas(PISTAS)
 avioes = generate_avioes(ATERRAGENS,DESCOLAGENS)
-gares = generate_gares(GARES,avioes[-DESCOLAGENS:])
-avioes = avioes[:ATERRAGENS] + get_avioes_estacionados(gares)
+gares = generate_gares(GARES,avioes[ATERRAGENS:])
+avioes = avioes[:ATERRAGENS] + get_avioes_descolar(gares)
 
 
 

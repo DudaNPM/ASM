@@ -101,13 +101,24 @@ class GestorGares(agent.Agent):
                     gare = received.get('gare')     # gare que acababou de ser ocupada
                     aviao = received.get('aviao')   # avião que acabou de aterrar
 
-                    gare.setFree(False)
                     gare.setAviao(aviao)
                     self.set('gares', [gare if item == gare else item for item in self.get('gares')])
-                
 
+                    self.agent.add_behaviour(self.agent.GaresInfo())
+
+                
                 ## mensagem do aviao a informar a desocupação da gare
                 elif performative == 'inform_free_gare':
                     received.setFree(True)
                     received.setAviao(None)
                     self.set('gares', [received if item == received else item for item in self.get('gares')])
+
+                    self.agent.add_behaviour(self.agent.GaresInfo())
+
+
+                ## mensagem da torre de controlo a informar que uma gare foi reservada
+                elif performative == 'inform_reserved_gare':
+                    received.setFree(False)
+                    self.set('gares', [received if item == received else item for item in self.get('gares')])
+
+                    self.agent.add_behaviour(self.agent.GaresInfo())

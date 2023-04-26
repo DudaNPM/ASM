@@ -35,32 +35,34 @@ def distance(pos1:Posicao,pos2:Posicao):
 
 
 def get_closest_lane_and_gare(pistas:list[Pista], gares:list[Gare]):
-    """Calcula o par (`pista`,`gare`) mais próximos um do outro.
+    """Calcula a `pista` e `gare` mais próximos um do outro.
 
     Parameters
     ----------
     pistas : array_like
         Lista de todas as pistas.
     gares : array_like
-        Lista de todas as gares.
+        Lista de todas as gares livres.
     
     Returns
     -------
-    par : tuple
-        Par (`pista`,`gare`) mais próximos.
+    pista : Pista
+        Pista mais próxima de `gare`.
+    gare : Gare
+        Gare mais próxima de `pista`.
     """
-    par = None
+    pista = gare = None
     menor_distancia = float('inf')
     
-    for pista in pistas:
-        if pista.getFree():
-            for gare in gares:
-                d = distance(pista.getPosicao(), gare.getPosicao())
+    for p in pistas:
+        if p.getFree():
+            for g in gares:
+                d = distance(p.getPosicao(), g.getPosicao())
                 if d < menor_distancia:
                     menor_distancia = d
-                    par = (pista, gare)
+                    pista, gare = p, g
     
-    return par
+    return pista,gare
 
 
 def get_closest_lane_to_gare(pistas:list[Pista], gare:Gare):
@@ -91,8 +93,8 @@ def get_closest_lane_to_gare(pistas:list[Pista], gare:Gare):
     return closest
 
 
-def get_avioes_estacionados(gares:list[Gare]):
-    """Calcula uma lista com todos os aviões que estão estacionados.
+def get_avioes_descolar(gares:list[Gare]):
+    """Calcula uma lista com todos os aviões que querem descolar.
 
     Parameters
     ----------
@@ -102,13 +104,14 @@ def get_avioes_estacionados(gares:list[Gare]):
     Returns
     -------
     avioes : array_like
-        Lista de todos os aviões estacionados.
+        Lista de todos os aviões que querem descolar.
     """
     avioes = list[Aviao]()
 
     for gare in gares:
-        if not gare.getFree():
-            avioes.append(gare.getAviao())
+        if not gare.getFree() and gare.getAviao():
+            if gare.getAviao().getOperation() == 'descolar':
+                avioes.append(gare.getAviao())
     
     return avioes
 
@@ -130,7 +133,7 @@ def get_occupied_gare(gares:list[Gare], aviao:Aviao):
         A gare onde o `aviao` está estacionado.
     """
     for gare in gares:
-        if not gare.getFree():
+        if not gare.getFree() and gare.getAviao():
             if gare.getAviao().getId() == aviao.getId():
                 return gare
 

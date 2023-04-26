@@ -56,22 +56,26 @@ class AviaoAgent(agent.Agent):
                 if performative == 'positive_landing':
                     pista = received.get('pista')
                     gare = received.get('gare')
+                    aviao = self.get('aviao')
+                    aviao.setOperation('finalizado')
+                    
                     
                     ## sleep - simular o tempo de aterragem
                     await asyncio.sleep(T1+T2)
                     ## informar a torre que a pista esta livre
-                    msg1 = Message(to=self.get('TorreControloID'))
-                    msg1.set_metadata('performative', 'inform_free_lane')
-                    msg1.body = jsonpickle.encode({'aviao':self.get('aviao'), 'pista':pista})
-                    await self.send(msg1)
+                    msg = Message(to=self.get('TorreControloID'))
+                    msg.set_metadata('performative', 'inform_free_lane')
+                    msg.body = jsonpickle.encode({'aviao':aviao, 'pista':pista})
+                    await self.send(msg)
 
+                    
                     ## sleep - simular o tempo de estacionamento
                     await asyncio.sleep(T3)
                     ## informar o gestor de gares que a gare esta ocupada
-                    msg2 = Message(to=self.get('GestorGaresID'))
-                    msg2.set_metadata('performative', 'inform_occupied_gare')
-                    msg2.body = jsonpickle.encode({'gare':gare, 'aviao':self.get('aviao')})
-                    await self.send(msg2)
+                    msg = Message(to=self.get('GestorGaresID'))
+                    msg.set_metadata('performative', 'inform_occupied_gare')
+                    msg.body = jsonpickle.encode({'gare':gare, 'aviao':aviao})
+                    await self.send(msg)
 
                     self.kill()
                 
@@ -84,6 +88,7 @@ class AviaoAgent(agent.Agent):
                     if status == 'aeroporto':
                         print("Agent {}".format(self.agent.jid) + ": vou dirigir-me para outro aeroporto.")
                         self.kill()
+                    
                     ## aguardar
                     elif status == 'aguardar':
                         await asyncio.sleep(T4)
@@ -98,18 +103,19 @@ class AviaoAgent(agent.Agent):
                     ## sleep - simular o tempo gare-pista
                     await asyncio.sleep(T3)
                     ## informar o gestor de gares que a gare esta livre
-                    msg1 = Message(to=self.get('GestorGaresID'))
-                    msg1.set_metadata('performative', 'inform_free_gare')
-                    msg1.body = jsonpickle.encode(gare)
-                    await self.send(msg1)
+                    msg = Message(to=self.get('GestorGaresID'))
+                    msg.set_metadata('performative', 'inform_free_gare')
+                    msg.body = jsonpickle.encode(gare)
+                    await self.send(msg)
 
+                    
                     ## sleep - simular o tempo de descolagem
                     await asyncio.sleep(T1+T2)
                     ## informar a torre que a pista esta livre
-                    msg2 = Message(to=self.get('TorreControloID'))
-                    msg2.set_metadata('performative', 'inform_free_lane')
-                    msg2.body = jsonpickle.encode({'aviao':self.get('aviao'), 'pista':pista})
-                    await self.send(msg2)
+                    msg = Message(to=self.get('TorreControloID'))
+                    msg.set_metadata('performative', 'inform_free_lane')
+                    msg.body = jsonpickle.encode({'aviao':self.get('aviao'), 'pista':pista})
+                    await self.send(msg)
 
                     self.kill()
                 
@@ -131,4 +137,5 @@ class AviaoAgent(agent.Agent):
                     msg.body = jsonpickle.encode(self.get('aviao'))
                     msg.set_metadata('performative', 'aviao_inform')
                     await self.send(msg)
+                    
                     self.kill()
