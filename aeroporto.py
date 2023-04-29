@@ -12,10 +12,10 @@ from agents.TorreControloAgent import TorreControlo
 
 
 
-GARES = 5
-PISTAS = 2
-ATERRAGENS = 3
-DESCOLAGENS = 10
+GARES = 6
+PISTAS = 3
+ATERRAGENS = 10
+DESCOLAGENS = 4
 
 
 
@@ -46,6 +46,7 @@ torrecontrolo.set('GestorGaresID', gestorgaresID)
 torrecontrolo.set('pistas', pistas)
 torrecontrolo.set('InfoID', infoID)
 future = torrecontrolo.start()
+torrecontrolo.web.start(hostname="127.0.0.1", port="10000") ## http://127.0.0.1:10000/spade
 future.result()
 
 
