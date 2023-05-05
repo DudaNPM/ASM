@@ -14,7 +14,7 @@ class Gare:
     free : bool
         Boolean que nos indica se a gare está livre ou não.
     tipo : str
-        Indica-nos o tipo de gare (comercial ou mercadorias).
+        Indica-nos o tipo de gare (comercial ou mercadorias ou privado).
     aviao : Aviao
         Se estiver ocupada, indica o `aviao` que lá se encontra.
     """

@@ -1,3 +1,4 @@
+import random
 import jsonpickle
 
 from spade import agent
@@ -5,12 +6,27 @@ from spade.message import Message
 from spade.behaviour import CyclicBehaviour
 from spade.behaviour import OneShotBehaviour
 
+from utils.metereologia import Metereologia
+
 from utils.functions import get_free_gares
 from utils.functions import get_occupied_gare
 
 
 
 class GestorGares(agent.Agent):
+
+    metereologia = [Metereologia.CEULIMPO,Metereologia.CEULIMPO,Metereologia.CEULIMPO,
+                    Metereologia.SOL,Metereologia.SOL,Metereologia.SOL,
+                    Metereologia.CHUVAFRACA,Metereologia.CHUVAFRACA,
+                    Metereologia.VENTOFRACO,Metereologia.VENTOFRACO,
+                    Metereologia.NEVE,Metereologia.NEVE,
+                    Metereologia.VENTOFORTE,Metereologia.VENTOFORTE,
+                    Metereologia.GRANIZO,Metereologia.GRANIZO,
+                    Metereologia.CHUVAFORTE,
+                    Metereologia.NEVOEIRO,
+                    Metereologia.TEMPESTADE,
+                    Metereologia.FURACAO]
+
 
     async def setup(self):
         print("Agent {}".format(str(self.jid)) + " starting...")
@@ -45,16 +61,28 @@ class GestorGares(agent.Agent):
                 ## DE: aviao
                 ## CONTEÚDO: aviao
                 ## DESCRIÇÃO: pedido de descolagem
-                ## RESPOSTA: calcular a gare ocupada pelo avião
+                ## RESPOSTA: verificar metereologia
+                ##           calcular a gare ocupada pelo avião
                 ##           pedir à torre de controlo uma pista livre
                 if performative == 'takeoff_request':
-                    gare = get_occupied_gare(self.get('gares'), received)
+                    metereologia = random.choice(self.agent.metereologia)
+                    
+                    if metereologia == Metereologia.FURACAO:
+                        target = received.getId()
+                        performative = 'takeoff_request_refuse'
+                        body = {'status':'aguardar'}
+                    
+                    else:
+                        gare = get_occupied_gare(self.get('gares'), received)
 
-                    msg = Message(to=self.get('TorreControloID'))
-                    msg.set_metadata('performative', 'free_lane_request')
-                    msg.body = jsonpickle.encode(gare)
+                        target = self.get('TorreControloID')
+                        performative = 'free_lane_request'
+                        body = gare
+
+                    msg = Message(to=target)
+                    msg.set_metadata('performative',performative)
+                    msg.body = jsonpickle.encode(body)
                     await self.send(msg)
-                
                 
                 
                 ## DE: torre controlo
@@ -80,16 +108,20 @@ class GestorGares(agent.Agent):
                 ## CONTEÚDO: aviao e pista
                 ## DESCRIÇÃO: pista livre para o aviao descolar
                 ## RESPOSTA: calcular a gare onde o avião está estacionado
-                ##           informar o avião da pista livre para descolar
+                ##           informar o avião da pista livre para descolar e a metereologia em questão
                 elif performative == 'free_lane_accept':
                     aviao = received.get('aviao')
                     pista = received.get('pista')
                     
                     gare = get_occupied_gare(self.get('gares'), aviao)
 
+                    self.agent.metereologia.remove(Metereologia.FURACAO)
+                    metereologia = random.choice(self.agent.metereologia)
+                    self.agent.metereologia.append(Metereologia.FURACAO)
+
                     msg = Message(to=aviao.getId())
-                    msg.set_metadata('performative', 'takeoff_request_accept')
-                    msg.body = jsonpickle.encode({'pista':pista, 'gare':gare})
+                    msg.set_metadata('performative','takeoff_request_accept')
+                    msg.body = jsonpickle.encode({'pista':pista,'gare':gare,'metereologia':metereologia})
                     await self.send(msg)
                 
 
@@ -107,32 +139,23 @@ class GestorGares(agent.Agent):
 
 
                 ## DE: aviao
-                ## CONTEÚDO: gare e aviao
+                ## CONTEÚDO: gare
                 ## DESCRIÇÃO: mensagem do aviao a informar a ocupação de uma gare
-                ## RESPOSTA: alterar o estado da gare
+                ## RESPOSTA: atualizar as gares
                 ##           enviar informação para o torre
                 elif performative == 'occupied_gare_inform':
-                    gare = received.get('gare')
-                    aviao = received.get('aviao')
-
-                    gare.setFree(False)
-                    gare.setAviao(aviao)
-                    self.set('gares', [gare if item == gare else item for item in self.get('gares')])
-
+                    self.set('gares', [received if item == received else item for item in self.get('gares')])
                     self.agent.add_behaviour(self.agent.GaresInfo())
 
                 
 
                 ## DE: aviao
-                ## CONTEÚDO: gare e aviao
+                ## CONTEÚDO: gare
                 ## DESCRIÇÃO: mensagem do aviao a informar a desocupação de uma gare
                 ## RESPOSTA: alterar o estado da gare
                 ##           enviar informação para o torre
                 elif performative == 'free_gare_inform':
-                    received.setFree(True)
-                    received.setAviao(None)
                     self.set('gares', [received if item == received else item for item in self.get('gares')])
-
                     self.agent.add_behaviour(self.agent.GaresInfo())
 
                 
@@ -170,3 +193,19 @@ class GestorGares(agent.Agent):
                         msg.set_metadata('performative', performative)
                         msg.body = jsonpickle.encode(body)
                         await self.send(msg)
+                
+
+
+                ## DE: aviao
+                ## CONTEÚDO: gare e aviao
+                ## DESCRIÇÃO: novo estado de um avião estacionado
+                ## RESPOSTA: atualizar o estado das gares
+                ##           enviar info para a torre
+                elif performative == 'change_state_inform':
+                    gare = received.get('gare')
+                    aviao = received.get('aviao')
+
+                    gare.setAviao(aviao)
+                    self.set('gares', [gare if item == gare else item for item in self.get('gares')])
+
+                    self.agent.add_behaviour(self.agent.GaresInfo())

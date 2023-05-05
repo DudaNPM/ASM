@@ -1,3 +1,4 @@
+import random
 import datetime
 import jsonpickle
 
@@ -8,6 +9,8 @@ from spade import agent
 from spade.message import Message
 from spade.behaviour import CyclicBehaviour
 from spade.behaviour import PeriodicBehaviour
+
+from utils.metereologia import Metereologia
 
 from utils.functions import get_avioes_descolar
 from utils.functions import get_closest_lane_to_gare
@@ -24,6 +27,17 @@ class TorreControlo(agent.Agent):
     gares = list[Gare]()
     aterragens = list[Aviao]()
     descolagens = list[Aviao]()
+    metereologia = [Metereologia.CEULIMPO,Metereologia.CEULIMPO,Metereologia.CEULIMPO,
+                    Metereologia.SOL,Metereologia.SOL,Metereologia.SOL,
+                    Metereologia.CHUVAFRACA,Metereologia.CHUVAFRACA,
+                    Metereologia.VENTOFRACO,Metereologia.VENTOFRACO,
+                    Metereologia.NEVE,Metereologia.NEVE,
+                    Metereologia.VENTOFORTE,Metereologia.VENTOFORTE,
+                    Metereologia.GRANIZO,Metereologia.GRANIZO,
+                    Metereologia.CHUVAFORTE,
+                    Metereologia.NEVOEIRO,
+                    Metereologia.TEMPESTADE,
+                    Metereologia.FURACAO]
 
 
     async def setup(self):
@@ -59,28 +73,53 @@ class TorreControlo(agent.Agent):
                 ## DE: aviao
                 ## CONTEÚDO: aviao
                 ## DESCRIÇÃO: pedido de aterragem por parte de um aviao
-                ## RESPOSTA: verificar se o aviao ja esta em fila de espera ou
+                ## RESPOSTA: verififcar metereologia
+                ##           verificar se o aviao é privado, se for, ignora a fila de espera e tem acesso direto à gare
+                ##           verificar se o aviao ja esta em fila de espera ou
                 ##           verificar se o limite máximo de aviões em fila de espera não foi atingido, se sim processar pedido
                 ##           caso contrário, mandar o aviao aterrar noutro aeroporto
                 if performative == 'landing_request':
+                    metereologia = random.choice(self.agent.metereologia)
 
-                    if received in self.agent.aterragens:
-                        msg = Message(to=self.get('GestorGaresID'))
-                        msg.set_metadata('performative','free_gares_request')
-                        msg.body = jsonpickle.encode(received)
+                    if metereologia == Metereologia.FURACAO:
+                        target = received.getId()
+                        performative = 'landing_request_refuse'
+                        body = {'status':'aguardar'}
+
+                    elif received.getTipo() == 'privado':
+                        if received not in self.agent.aterragens:
+                            self.agent.aterragens.append(received)
+                        
+                        target = received.getId()
+                        pista, gare = get_closest_lane_and_gare(self.get('pistas'), [self.agent.gares[0]])
+
+                        if pista:
+                            pista.setFree(False)
+                            self.set('pistas', [pista if item == pista else item for item in self.get('pistas')])
+                        
+                        performative = 'landing_request_accept' if pista else 'landing_request_refuse'
+                        body = {'pista':pista,'gare':gare,'metereologia':metereologia} if pista else {'status':'aguardar'}
+
+                    elif received in self.agent.aterragens:
+                        target = self.get('GestorGaresID')
+                        performative = 'free_gares_request'
+                        body = received
                     
                     elif len(self.agent.aterragens) < MAX:
                         self.agent.aterragens.append(received)
                         
-                        msg = Message(to=self.get('GestorGaresID'))
-                        msg.set_metadata('performative', 'free_gares_request')
-                        msg.body = jsonpickle.encode(received)
+                        target = self.get('GestorGaresID')
+                        performative = 'free_gares_request'
+                        body = received
                     
                     else:
-                        msg = Message(to=received.getId())
-                        msg.set_metadata('performative', 'landing_request_refuse')
-                        msg.body = jsonpickle.encode({'status':'aeroporto'})
+                        target = received.getId()
+                        performative = 'landing_request_refuse'
+                        body = {'status':'aeroporto'}
                     
+                    msg = Message(to=target)
+                    msg.set_metadata('performative',performative)
+                    msg.body = jsonpickle.encode(body)
                     await self.send(msg)
 
                 
@@ -106,16 +145,14 @@ class TorreControlo(agent.Agent):
                     if pista:
                         pista.setFree(False)
                         self.set('pistas', [pista if item == pista else item for item in self.get('pistas')])
-
-                        msg = Message(to=self.get('GestorGaresID'))
-                        msg.set_metadata('performative','gare_request')
-                        msg.body = jsonpickle.encode({'gare':gare, 'pista':pista, 'aviao':aviao})
                     
-                    else:
-                        msg = Message(to=aviao.getId())
-                        msg.set_metadata('performative','landing_request_refuse')
-                        msg.body = jsonpickle.encode({'status':'aguardar'})
+                    target = self.get('GestorGaresID') if pista else aviao.getId()
+                    performative = 'gare_request' if pista else 'landing_request_refuse'
+                    body = {'gare':gare, 'pista':pista, 'aviao':aviao} if pista else {'status':'aguardar'}
                     
+                    msg = Message(to=target)
+                    msg.set_metadata('performative',performative)
+                    msg.body = jsonpickle.encode(body)
                     await self.send(msg)
                 
                 
@@ -136,7 +173,6 @@ class TorreControlo(agent.Agent):
                     msg = Message(to=str(aviao.getId()))
                     msg.set_metadata('performative','landing_request_refuse')
                     msg.body = jsonpickle.encode({'status':'aguardar'})
-
                     await self.send(msg)
 
 
@@ -144,15 +180,19 @@ class TorreControlo(agent.Agent):
                 ## DE: gestor de gares
                 ## CONTEÚDO: pista, aviao e gare
                 ## DESCRIÇÃO: confirmação da gare escolhida
-                ## RESPOSTA: comunicar ao avião a pista e a gare
+                ## RESPOSTA: comunicar ao avião a pista, a gare e a metereologia em questão
                 elif performative == 'gare_request_accept':
                     gare = received.get('gare')
                     pista = received.get('pista')
                     aviao = received.get('aviao')
+
+                    self.agent.metereologia.remove(Metereologia.FURACAO)
+                    metereologia = random.choice(self.agent.metereologia)
+                    self.agent.metereologia.append(Metereologia.FURACAO)
                     
                     msg = Message(to=aviao.getId())
                     msg.set_metadata('performative', 'landing_request_accept')
-                    msg.body = jsonpickle.encode({'pista':pista,'gare':gare})
+                    msg.body = jsonpickle.encode({'pista':pista,'gare':gare,'metereologia':metereologia})
                     await self.send(msg)
                 
 
@@ -177,7 +217,6 @@ class TorreControlo(agent.Agent):
                     msg = Message(to=self.get('GestorGaresID'))
                     msg.set_metadata('performative', performative)
                     msg.body = jsonpickle.encode(body)
-
                     await self.send(msg)
                 
                 
@@ -185,13 +224,12 @@ class TorreControlo(agent.Agent):
                 ## DE: aviao
                 ## CONTEÚDO: aviao e pista
                 ## DESCRIÇÃO: mensagem do aviao a informar a desocupação da pista
-                ## RESPOSTA: alterar o estado da pista
+                ## RESPOSTA: atualizar as pistas
                 ##           remover o avião da lista de aterragens
                 elif performative == 'free_lane_inform':
                     aviao = received.get('aviao')
                     pista = received.get('pista')
 
-                    pista.setFree(True)
                     self.set('pistas', [pista if item == pista else item for item in self.get('pistas')])
                     
                     if aviao in self.agent.aterragens:
@@ -211,7 +249,7 @@ class TorreControlo(agent.Agent):
 
 
                 ## DE: aviao
-                ## CONTEÚDO: ...
+                ## CONTEÚDO: avião
                 ## DESCRIÇÃO: mensagem de um aviao a informar que vai aterrar noutro aeroporto
                 ## RESPOSTA: atualizar a lista de aterragens
                 elif performative == 'aviao_inform':

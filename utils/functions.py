@@ -8,9 +8,10 @@ from utils.posicao import Posicao
 
 
 
-tipos = ['comercial', 'mercadorias']
-companhias = ['AEGEAN', 'AIR EUROPA', 'easyJet', 'EMIRATES', 'EUROWINGS', 'FLYDUBAI', 'PEGASUS AIRLINES', 'RYANAIR', 'Saudia Airlines', 'SMART WINGS', 'SWISS AIR', 'TAP']
-aeroportos = ['Lulea Kallax', 'Helsinquia Vantaa', 'Estrasburgo', 'Altay', 'International Falls', 'Tarakan', 'Dillingham', 'Wolf Point', 'Temuco', 'Coral Harbour', 'Mandalay', 'Ulyanovsk Baratayevka', 'Ponce', 'Tiksi', 'Tiksi', 'Elim', 'Fuzhou', 'Brisbane', 'Istambul', 'Quebec', 'Jabalpur', 'Bastia', 'Damasco', 'Chifeng', 'Villahermosa', 'Akureyri', 'Nyagan', 'Tambov', 'Misurata', 'Chiang Rai']
+BASE = 'G6 AIR LINES'
+TIPOS = ['comercial', 'comercial', 'mercadorias', 'mercadorias', 'privado']
+COMPANHIAS = ['AEGEAN', 'AIR EUROPA', 'easyJet', 'EMIRATES', 'EUROWINGS', 'FLYDUBAI', 'PEGASUS AIRLINES', 'RYANAIR', 'Saudia Airlines', 'SMART WINGS', 'SWISS AIR', 'TAP']
+AEROPORTOS = ['Lulea Kallax', 'Helsinquia Vantaa', 'Estrasburgo', 'Altay', 'International Falls', 'Tarakan', 'Dillingham', 'Wolf Point', 'Temuco', 'Coral Harbour', 'Mandalay', 'Ulyanovsk Baratayevka', 'Ponce', 'Tiksi', 'Tiksi', 'Elim', 'Fuzhou', 'Brisbane', 'Istambul', 'Quebec', 'Jabalpur', 'Bastia', 'Damasco', 'Chifeng', 'Villahermosa', 'Akureyri', 'Nyagan', 'Tambov', 'Misurata', 'Chiang Rai']
 
 
 
@@ -181,22 +182,30 @@ def generate_avioes(aterrar:int, descolar:int):
     """
     lista = list[Aviao]()
 
-    for i in range(1,aterrar+descolar+1):
-        operacao = 'aterrar' if i <= aterrar else 'descolar'
+    for i in range(1,aterrar+1):
         id = 'aviao' + str(i) + '@desktop-jh2ka3p'
-        companhia = random.choice(companhias)
-        tipo = random.choice(tipos)
-        origemEdestino = random.choices(aeroportos, k=2)
-        origem = origemEdestino[0]
-        destino = origemEdestino[1]
-        lista.append(Aviao(operacao, id, companhia, tipo, origem, destino))
+        companhia = random.choice(COMPANHIAS)
+        tipo = random.choice(TIPOS)
+        origem = random.choice(AEROPORTOS)
+        lista.append(Aviao('aterrar', id, companhia, tipo, origem, BASE))
+
+    TIPOS.remove('privado')
+
+    for i in range(aterrar+1,aterrar+descolar+1):
+        id = 'aviao' + str(i) + '@desktop-jh2ka3p'
+        companhia = random.choice(COMPANHIAS)
+        tipo = random.choice(TIPOS)
+        destino = random.choice(AEROPORTOS)
+        lista.append(Aviao('descolar', id, companhia, tipo, BASE, destino))
     
+    TIPOS.append('privado')
     return lista
 
 
 
 def generate_gares(n:int, avioes:list[Aviao]):
     """Cria uma lista de `n` gares de acordo com uma lista de aviões que pretendem descolar.
+    A primeira gare é sempre do tipo privado.
 
     Parameters
     ----------
@@ -212,10 +221,15 @@ def generate_gares(n:int, avioes:list[Aviao]):
     """
     lista = list[Gare]()
 
-    for i in range(1,n+1):
+    id = 'gare1'
+    pos = Posicao(random.randint(0,100), random.randint(0,100))
+    tipo = 'privado'
+    lista.append(Gare(id,pos,True,tipo))
+
+    for i in range(2,n+1):
         id = 'gare' + str(i)
         pos = Posicao(random.randint(0,100), random.randint(0,100))
-        tipo = 'comercial' if i <= n/2 else 'mercadorias'
+        tipo = 'comercial' if i < ((n-1)/2)+2 else 'mercadorias'
         lista.append(Gare(id,pos,True,tipo))
     
     for aviao in avioes:
@@ -245,7 +259,7 @@ def generate_pistas(n:int):
     lista = list[Pista]()
 
     for i in range(1,n+1):
-        id = 'pista' + str(i) + '@desktop-jh2ka3p'
+        id = 'pista' + str(i)
         pos = Posicao(random.randint(0,100), random.randint(0,100))
         lista.append(Pista(id,pos,True))
     

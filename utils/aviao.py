@@ -10,7 +10,7 @@ class Aviao:
     companhia : str
         Companhia de voo do avião.
     tipo : str
-        Indica-nos o tipo do avião (comercial ou mercadorias).
+        Indica-nos o tipo do avião (comercial ou mercadorias ou privado).
     origem : str
         Local de origem do avião.
     destino : str

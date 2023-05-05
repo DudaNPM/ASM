@@ -1,3 +1,4 @@
+import random
 import asyncio
 import jsonpickle
 
@@ -6,11 +7,15 @@ from spade.message import Message
 from spade.behaviour import OneShotBehaviour
 from spade.behaviour import CyclicBehaviour
 
+from utils.functions import AEROPORTOS
+
 
 T1 = 20 # tempo de operação entre o avião e a pista de aterragem
 T2 = 10 # tempo de circulação na pista
 T3 = 10 # tempo de deslocação entre a pista e a gare
-T4 = 60 # tempo de espera para voltar a realizar pedido de descolagem/aterragem
+T4 = 40 # tempo de espera para voltar a realizar pedido de descolagem/aterragem
+T5 =  5 # tempo que um avião privado está na gare
+T6 = 15 # tempo que um aviao não privado está na gare
 
 
 class AviaoAgent(agent.Agent):
@@ -29,14 +34,14 @@ class AviaoAgent(agent.Agent):
     class RequestLandingOrTakeOff(OneShotBehaviour):
         async def run(self):
             operation = self.get('aviao').getOperation()
-            performative = 'landing_request' if operation == 'aterrar' else 'takeoff_request'
-            receiver = self.get('TorreControloID') if operation == 'aterrar' else self.get('GestorGaresID')
+            if operation != 'finalizado':
+                performative = 'landing_request' if operation == 'aterrar' else 'takeoff_request'
+                receiver = self.get('TorreControloID') if operation == 'aterrar' else self.get('GestorGaresID')
 
-            msg = Message(to=receiver)
-            msg.set_metadata('performative', performative)
-            msg.body = jsonpickle.encode(self.get('aviao'))
-
-            await self.send(msg)
+                msg = Message(to=receiver)
+                msg.set_metadata('performative', performative)
+                msg.body = jsonpickle.encode(self.get('aviao'))
+                await self.send(msg)
 
 
     class AwaitLandingOrTakeOff(CyclicBehaviour):
@@ -50,33 +55,64 @@ class AviaoAgent(agent.Agent):
                 
                 
                 ## DE: torre controlo
-                ## CONTEÚDO: pista e gare
+                ## CONTEÚDO: pista, gare e metereologia
                 ## DESCRIÇÃO: resposta positiva para aterrar e estacionar
                 ## RESPOSTA: alterar a operação do aviao
                 ##           aterrar circular na pista e avisar a torre controlo que a pista está livre
                 ##           circular da pista à gare e avisar o gestor que a gare está ocupada
+                ##           se for privado, simular tempo de saída da gare, avisar o gestor e sair do sistema
+                ##           caso contrário, após um tempo de espera altera-se o estado do avião e realiza-se um pedido de takeoff
                 if performative == 'landing_request_accept':
                     pista = received.get('pista')
                     gare = received.get('gare')
+                    metereologia = received.get('metereologia')
+                    print('LANDING -> METEREOLOGIA: ' + str(metereologia) + ' Valor: ' + str(metereologia.value))
                     
                     aviao = self.get('aviao')
                     aviao.setOperation('finalizado')
                     self.set('aviao',aviao)
+
+                    gare.setFree(False)
+                    gare.setAviao(aviao)
                     
-                    await asyncio.sleep(T1+T2)
+                    pista.setFree(True)
+
+                    await asyncio.sleep((T1+T2)*metereologia.value)
                     msg = Message(to=self.get('TorreControloID'))
                     msg.set_metadata('performative', 'free_lane_inform')
                     msg.body = jsonpickle.encode({'aviao':aviao, 'pista':pista})
                     await self.send(msg)
 
-                    await asyncio.sleep(T3)
+                    await asyncio.sleep(T3*metereologia.value)
                     msg = Message(to=self.get('GestorGaresID'))
                     msg.set_metadata('performative', 'occupied_gare_inform')
-                    msg.body = jsonpickle.encode({'gare':gare, 'aviao':aviao})
+                    msg.body = jsonpickle.encode(gare)
                     await self.send(msg)
 
-                    self.kill()
-                
+                    if aviao.getTipo() == 'privado':
+                        await asyncio.sleep(T5)
+                        gare.setFree(True)
+                        gare.setAviao(None)
+
+                        msg = Message(to=self.get('GestorGaresID'))
+                        msg.set_metadata('performative','free_gare_inform')
+                        msg.body = jsonpickle.encode(gare)
+                        await self.send(msg)
+                        self.kill()
+
+                    else:
+                        await asyncio.sleep(T6)
+                        aviao.setOperation('descolar')
+                        aviao.setOrigem(aviao.getDestino())
+                        aviao.setDestino(random.choice(AEROPORTOS))
+                        self.set('aviao',aviao)
+
+                        msg = Message(to=self.get('GestorGaresID'))
+                        msg.set_metadata('performative','change_state_inform')
+                        msg.body = jsonpickle.encode({'gare':gare, 'aviao':aviao})
+                        await self.send(msg)
+
+                        self.agent.add_behaviour(self.agent.RequestLandingOrTakeOff())
                 
 
                 ## DE: torre controlo
@@ -98,7 +134,7 @@ class AviaoAgent(agent.Agent):
 
                 
                 ## DE: gestor de gares
-                ## CONTEÚDO: pista e gare
+                ## CONTEÚDO: pista, gare e metereologia
                 ## DESCRIÇÃO: resposta positiva para descolar
                 ## RESPOSTA: circular da gare até à pista e informar o gestor que a gare está livre
                 ##           circular na pista para descolar e informar a torre que a pista está livre
@@ -106,14 +142,21 @@ class AviaoAgent(agent.Agent):
                 elif performative == 'takeoff_request_accept':
                     pista = received.get('pista')
                     gare = received.get('gare')
+                    metereologia = received.get('metereologia')
+                    print('TAKEOFF -> METEREOLOGIA: ' + str(metereologia) + ' Valor: ' + str(metereologia.value))
+
+                    gare.setFree(True)
+                    gare.setAviao(None)
+
+                    pista.setFree(True)
                     
-                    await asyncio.sleep(T3)
+                    await asyncio.sleep(T3*metereologia.value)
                     msg = Message(to=self.get('GestorGaresID'))
                     msg.set_metadata('performative', 'free_gare_inform')
                     msg.body = jsonpickle.encode(gare)
                     await self.send(msg)
                     
-                    await asyncio.sleep(T1+T2)
+                    await asyncio.sleep((T1+T2)*metereologia.value)
                     msg = Message(to=self.get('TorreControloID'))
                     msg.set_metadata('performative', 'free_lane_inform')
                     msg.body = jsonpickle.encode({'aviao':self.get('aviao'), 'pista':pista})
