@@ -10,12 +10,12 @@ from spade.behaviour import CyclicBehaviour
 from utils.functions import AEROPORTOS
 
 
-T1 = 20 # tempo de operação entre o avião e a pista de aterragem
-T2 = 10 # tempo de circulação na pista
-T3 = 10 # tempo de deslocação entre a pista e a gare
-T4 = 40 # tempo de espera para voltar a realizar pedido de descolagem/aterragem
+T1 = 10 # tempo de operação entre o avião e a pista de aterragem
+T2 =  5 # tempo de circulação na pista
+T3 =  5 # tempo de deslocação entre a pista e a gare
+T4 = 20 # tempo de espera para voltar a realizar pedido de descolagem/aterragem
 T5 =  5 # tempo que um avião privado está na gare
-T6 = 15 # tempo que um aviao não privado está na gare
+T6 = 10 # tempo que um aviao não privado está na gare
 
 
 class AviaoAgent(agent.Agent):
@@ -176,19 +176,3 @@ class AviaoAgent(agent.Agent):
                     if status == 'aguardar':
                         await asyncio.sleep(T4)
                         self.agent.add_behaviour(self.agent.RequestLandingOrTakeOff())
-            
-
-            
-            else:
-                ## PARA: torre controlo
-                ## CONTEÚDO: aviao
-                ## DESCRIÇÃO: informar torre que irá aterrar noutro aeroporto
-                ## RESPOSTA: enviar mensagem
-                ##           sair do sistema
-                if self.get('aviao').getOperation() == 'aterrar':
-                    msg = Message(to=self.get('TorreControloID'))
-                    msg.body = jsonpickle.encode(self.get('aviao'))
-                    msg.set_metadata('performative', 'aviao_inform')
-                    await self.send(msg)
-                    
-                    self.kill()

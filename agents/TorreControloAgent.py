@@ -44,7 +44,7 @@ class TorreControlo(agent.Agent):
         print("Agent {}".format(str(self.jid)) + " starting...")
 
         ## Behaviours
-        self.info = self.Info(period=10,start_at=datetime.datetime.now() + datetime.timedelta(seconds=2))
+        self.info = self.Info(period=5,start_at=datetime.datetime.now() + datetime.timedelta(seconds=2))
         self.control = self.Control()
 
         self.add_behaviour(self.info)
@@ -245,13 +245,3 @@ class TorreControlo(agent.Agent):
                 elif performative == 'gares_inform':
                     self.agent.gares = received
                     self.agent.descolagens = get_avioes_descolar(received)
-                
-
-
-                ## DE: aviao
-                ## CONTEÚDO: avião
-                ## DESCRIÇÃO: mensagem de um aviao a informar que vai aterrar noutro aeroporto
-                ## RESPOSTA: atualizar a lista de aterragens
-                elif performative == 'aviao_inform':
-                    if received in self.agent.aterragens:
-                        self.agent.aterragens.remove(received)

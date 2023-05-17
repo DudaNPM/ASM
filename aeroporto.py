@@ -1,5 +1,7 @@
 import time
 
+from tkinter import *
+
 from utils.functions import generate_gares
 from utils.functions import generate_pistas
 from utils.functions import generate_avioes
@@ -10,13 +12,46 @@ from agents.AviaoAgent import AviaoAgent
 from agents.GestorGaresAgent import GestorGares
 from agents.TorreControloAgent import TorreControlo
 
+GARES = 0
+PISTAS = 0
+ATERRAGENS = 0
+DESCOLAGENS = 0
+
+def initialize():
+    global GARES
+    global PISTAS
+    global ATERRAGENS
+    global DESCOLAGENS
+
+    GARES = int(e1.get())
+    PISTAS = int(e2.get())
+    ATERRAGENS = int(e3.get())
+    DESCOLAGENS = int(e4.get())
+    
+    root.destroy()
 
 
-GARES = 5
-PISTAS = 2
-ATERRAGENS = 5
-DESCOLAGENS = 4
+root = Tk()
+root.title("G6 AIRPORT")
 
+Label(master=root, text='Número de gares do aeroporto').grid(row=0)
+Label(master=root, text='Número de pistas do aeroporto').grid(row=1)
+Label(master=root, text='Número de aviões a aterrar').grid(row=2)
+Label(master=root, text='Número de aviões a descolar').grid(row=3)
+
+e1 = Entry(root)
+e2 = Entry(root)
+e3 = Entry(root)
+e4 = Entry(root)
+
+e1.grid(row=0, column=1)
+e2.grid(row=1, column=1)
+e3.grid(row=2, column=1)
+e4.grid(row=3, column=1)
+
+Button(master=root, text='Start', command=initialize).grid(row=4, column=2, sticky=W, pady=4)
+
+root.mainloop()
 
 
 password  = "admin"
@@ -46,7 +81,6 @@ torrecontrolo.set('GestorGaresID', gestorgaresID)
 torrecontrolo.set('pistas', pistas)
 torrecontrolo.set('InfoID', infoID)
 future = torrecontrolo.start()
-## torrecontrolo.web.start(hostname="127.0.0.1", port="10000") ## http://127.0.0.1:10000/spade
 future.result()
 
 
